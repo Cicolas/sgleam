@@ -1,7 +1,7 @@
 #![allow(clippy::missing_safety_doc)]
 use error::show_error;
 use gleam::{compile, get_module, Project};
-use gleam_core::javascript::set_bigint_enabled;
+use gleam_core::{io::memory::InMemoryFileSystem, javascript::set_bigint_enabled};
 use quickjs::QuickJsEngine;
 use repl::{Repl, ReplOutput};
 
@@ -15,6 +15,7 @@ pub mod parser;
 pub mod quickjs;
 pub mod repl;
 pub mod run;
+pub mod filesystem;
 
 #[cfg(target_arch = "wasm32")]
 pub mod repl_reader_wasm;
@@ -100,7 +101,7 @@ fn new_string(ptr: *mut u8, len: usize) -> String {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn repl_new(str: *mut u8, len: usize) -> *mut Repl<QuickJsEngine> {
+pub unsafe extern "C" fn repl_new(str: *mut u8, len: usize) -> *mut Repl<QuickJsEngine, InMemoryFileSystem> {
     let mut project = Project::default();
     project.write_source("user.gleam", &new_string(str, len));
     let modules = match compile(&mut project, false) {
@@ -117,7 +118,7 @@ pub unsafe extern "C" fn repl_new(str: *mut u8, len: usize) -> *mut Repl<QuickJs
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn repl_destroy(repl: *mut Repl<QuickJsEngine>) {
+pub unsafe extern "C" fn repl_destroy(repl: *mut Repl<QuickJsEngine, InMemoryFileSystem>) {
     unsafe {
         let _ = Box::from_raw(repl);
     };
@@ -125,7 +126,7 @@ pub unsafe extern "C" fn repl_destroy(repl: *mut Repl<QuickJsEngine>) {
 
 #[no_mangle]
 pub unsafe extern "C" fn repl_run(
-    repl: *mut Repl<QuickJsEngine>,
+    repl: *mut Repl<QuickJsEngine, InMemoryFileSystem>,
     str: *mut u8,
     len: usize,
 ) -> bool {

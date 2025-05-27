@@ -1,21 +1,13 @@
 use std::{collections::HashMap, fmt::Write};
 
 use gleam_core::{
-    ast::{Definition, Pattern, Statement, TargetedDefinition, UntypedStatement},
-    build::Module,
-    io::FileSystemWriter,
-    Error,
+    ast::{Definition, Pattern, Statement, TargetedDefinition, UntypedStatement}, build::Module, io::memory::{InMemoryFileSystem}, Error
 };
 use indoc::formatdoc;
 use vec1::Vec1;
 
 use crate::{
-    engine::{Engine, MainFunction, REPL_MAIN},
-    error::SgleamError,
-    gleam::{compile, get_args_names, get_definition_src, type_to_string, Project},
-    parser::{self, ReplItem},
-    run::get_function,
-    swrite, swriteln, GLEAM_MODULES_NAMES,
+    engine::{Engine, MainFunction, REPL_MAIN}, error::SgleamError, filesystem::FileSystem, gleam::{compile, get_args_names, get_definition_src, type_to_string, Project}, parser::{self, ReplItem}, run::get_function, swrite, swriteln, GLEAM_MODULES_NAMES
 };
 
 const REPL_SAVE_LOAD_FNS: &str = r#"
@@ -37,14 +29,14 @@ pub fn welcome_message() -> String {
 }
 
 #[derive(Clone)]
-pub struct Repl<E: Engine> {
+pub struct Repl<E: Engine<FS>, FS: FileSystem> {
     user_import: Option<String>,
     imports: Vec<String>,
     consts: Vec<String>,
     types: Vec<String>,
     fns: HashMap<String, String>,
     vars: HashMap<String, Value>,
-    project: Project,
+    project: Project<FS>,
     engine: E,
     iter: (usize, usize),
     var_index: usize,
@@ -61,8 +53,8 @@ struct Value {
     type_: String,
 }
 
-impl<E: Engine> Repl<E> {
-    pub fn new(project: Project, user_module: Option<&Module>) -> Result<Repl<E>, SgleamError> {
+impl<E: Engine<FS>, FS: FileSystem> Repl<E, FS> {
+    pub fn new(project: Project<FS>, user_module: Option<&Module>) -> Result<Repl<E, FS>, SgleamError> {
         let imports = GLEAM_MODULES_NAMES.iter().map(|s| s.to_string()).collect();
         let fs = project.fs.clone();
         Ok(Repl {
@@ -155,7 +147,7 @@ impl<E: Engine> Repl<E> {
 
         self.project
             .fs
-            .delete_file(&Project::source().join(file))
+            .delete_file(&Project::<InMemoryFileSystem>::source().join(file))
             .expect("To delete repl file");
 
         let mut modules = result?;

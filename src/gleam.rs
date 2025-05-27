@@ -26,11 +26,11 @@ use std::{
 use tar::Archive;
 use termcolor::{Color, ColorSpec, WriteColor};
 
-use crate::{error::stderr_buffer_writer, GLEAM_STDLIB, GLEAM_STDLIB_BIGINT};
+use crate::{error::stderr_buffer_writer, filesystem::FileSystem, GLEAM_STDLIB, GLEAM_STDLIB_BIGINT};
 
 #[derive(Clone)]
-pub struct Project {
-    pub fs: InMemoryFileSystem,
+pub struct Project<FS: FileSystem> {
+    pub fs: FS,
 }
 
 fn stdlib() -> &'static [u8] {
@@ -41,13 +41,13 @@ fn stdlib() -> &'static [u8] {
     }
 }
 
-impl Default for Project {
-    fn default() -> Project {
+impl Default for Project<InMemoryFileSystem> {
+    fn default() -> Project<InMemoryFileSystem> {
         let mut project = Project {
             fs: InMemoryFileSystem::new(),
         };
 
-        extract_tar(&mut project.fs, Archive::new(stdlib()), Project::source())
+        extract_tar(&mut project.fs, Archive::new(stdlib()), Project::<InMemoryFileSystem>::source())
             .expect("Extract stdlib");
         project.write_source("sgleam/check.gleam", crate::SGLEAM_CHECK);
         project.write_source("sgleam_ffi.mjs", crate::SGLEAM_FFI_MJS);
@@ -56,7 +56,7 @@ impl Default for Project {
     }
 }
 
-impl Project {
+impl<FS: FileSystem> Project<FS> {
     pub fn root() -> &'static Utf8Path {
         "/".into()
     }
@@ -74,7 +74,7 @@ impl Project {
     }
 
     pub fn write_source(&mut self, name: &str, content: &str) {
-        let path = Project::source().join(name);
+        let path = Project::<FS>::source().join(name);
         self.fs
             .write(&path, content)
             .expect("Write a file in memory");
@@ -95,7 +95,7 @@ impl Project {
     }
 
     pub fn write_out(&mut self, name: &str, content: &str) {
-        let path = Project::out().join(name);
+        let path = Project::<FS>::out().join(name);
         self.fs
             .write(&path, content)
             .expect("Write a file in memory");
@@ -141,7 +141,7 @@ pub fn get_args_names(fun: &Function<(), UntypedExpr>) -> Vec<String> {
 }
 
 // TODO: move this function to Project
-pub fn compile(project: &mut Project, repl: bool) -> Result<Vec<Module>, Error> {
+pub fn compile<FS: FileSystem>(project: &mut Project<FS>, repl: bool) -> Result<Vec<Module>, Error> {
     let config = PackageConfig {
         target: Target::JavaScript,
         ..Default::default()
@@ -149,15 +149,15 @@ pub fn compile(project: &mut Project, repl: bool) -> Result<Vec<Module>, Error> 
 
     let target = TargetCodegenConfiguration::JavaScript {
         emit_typescript_definitions: false,
-        prelude_location: Project::prelude().into(),
+        prelude_location: Project::<FS>::prelude().into(),
     };
 
     let mut compiler = PackageCompiler::new(
         &config,
         Mode::Dev,
-        Project::root(),
-        Project::out(),
-        Project::out(),
+        Project::<FS>::root(),
+        Project::<FS>::out(),
+        Project::<FS>::out(),
         &target,
         UniqueIdGenerator::new(),
         project.fs.clone(),

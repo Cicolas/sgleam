@@ -28,13 +28,13 @@ pub struct QuickJsEngine {
     context: Context,
 }
 
-impl Engine for QuickJsEngine {
+impl Engine<InMemoryFileSystem> for QuickJsEngine {
     fn new(fs: InMemoryFileSystem) -> Self {
         #[cfg(not(target_arch = "wasm32"))]
         ctrlc::set_handler(interrupt).expect("Add crtlc handlers");
 
         QuickJsEngine {
-            context: create_context(fs, Project::out().into()).unwrap(),
+            context: create_context(fs, Project::<InMemoryFileSystem>::out().into()).unwrap(),
         }
     }
 

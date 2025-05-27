@@ -2,15 +2,11 @@ use camino::{Utf8Path, Utf8PathBuf};
 
 use gleam_core::{
     ast::{TypedDefinition, TypedFunction},
-    build::{Module, Target},
+    build::{Module, Target}, io::memory::InMemoryFileSystem,
 };
 
 use crate::{
-    engine::{Engine, MainFunction},
-    error::{show_error, SgleamError},
-    gleam::{compile, fn_type_to_string, get_module, type_to_string, Project},
-    repl::{welcome_message, Repl, ReplOutput},
-    repl_reader::ReplReader,
+    engine::{Engine, MainFunction}, error::{show_error, SgleamError}, filesystem::FileSystem, gleam::{compile, fn_type_to_string, get_module, type_to_string, Project}, repl::{welcome_message, Repl, ReplOutput}, repl_reader::ReplReader
 };
 
 use crate::quickjs::QuickJsEngine as JsEngine;
@@ -30,7 +26,7 @@ pub fn run_interative(paths: &[Utf8PathBuf], quiet: bool) -> Result<(), SgleamEr
         get_module(&modules, &name)
     });
 
-    let mut repl = Repl::<JsEngine>::new(project, module)?;
+    let mut repl = Repl::<JsEngine, InMemoryFileSystem>::new(project, module)?;
     for input in ReplReader::new()? {
         match repl.run(&input) {
             Err(err) => show_error(&err),
@@ -143,8 +139,8 @@ pub fn get_smain(module: &Module) -> Result<MainFunction, SgleamError> {
     }
 }
 
-fn copy_files_and_build(
-    project: &mut Project,
+fn copy_files_and_build<FS: FileSystem>(
+    project: &mut Project<FS>,
     paths: &[Utf8PathBuf],
 ) -> Result<Vec<Module>, gleam_core::Error> {
     for path in paths.iter().filter(|p| validade_path(p)) {

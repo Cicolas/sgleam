@@ -1,4 +1,4 @@
-use gleam_core::io::memory::InMemoryFileSystem;
+use crate::filesystem::FileSystem;
 
 pub const REPL_MAIN: &str = "repl_main";
 
@@ -20,8 +20,8 @@ impl MainFunction {
     }
 }
 
-pub trait Engine: Clone {
-    fn new(fs: InMemoryFileSystem) -> Self;
+pub trait Engine<FS: FileSystem>: Clone {
+    fn new(fs: FS) -> Self;
 
     fn run_main(&self, module: &str, main: MainFunction, show_output: bool);
 
