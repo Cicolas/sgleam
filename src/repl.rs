@@ -7,7 +7,7 @@ use indoc::formatdoc;
 use vec1::Vec1;
 
 use crate::{
-    engine::{Engine, MainFunction, REPL_MAIN}, error::SgleamError, filesystem::FileSystem, gleam::{compile, get_args_names, get_definition_src, type_to_string, Project}, parser::{self, ReplItem}, run::get_function, swrite, swriteln, GLEAM_MODULES_NAMES
+    engine::{Engine, MainFunction, REPL_MAIN}, error::SgleamError, io::IO, gleam::{compile, get_args_names, get_definition_src, type_to_string, Project}, parser::{self, ReplItem}, run::get_function, swrite, swriteln, GLEAM_MODULES_NAMES
 };
 
 const REPL_SAVE_LOAD_FNS: &str = r#"
@@ -29,14 +29,14 @@ pub fn welcome_message() -> String {
 }
 
 #[derive(Clone)]
-pub struct Repl<E: Engine<FS>, FS: FileSystem> {
+pub struct Repl<E: Engine<I>, I: IO> {
     user_import: Option<String>,
     imports: Vec<String>,
     consts: Vec<String>,
     types: Vec<String>,
     fns: HashMap<String, String>,
     vars: HashMap<String, Value>,
-    project: Project<FS>,
+    project: Project<I>,
     engine: E,
     iter: (usize, usize),
     var_index: usize,
@@ -53,8 +53,8 @@ struct Value {
     type_: String,
 }
 
-impl<E: Engine<FS>, FS: FileSystem> Repl<E, FS> {
-    pub fn new(project: Project<FS>, user_module: Option<&Module>) -> Result<Repl<E, FS>, SgleamError> {
+impl<E: Engine<I>, I: IO> Repl<E, I> {
+    pub fn new(project: Project<I>, user_module: Option<&Module>) -> Result<Repl<E, I>, SgleamError> {
         let imports = GLEAM_MODULES_NAMES.iter().map(|s| s.to_string()).collect();
         let fs = project.fs.clone();
         Ok(Repl {

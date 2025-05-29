@@ -6,7 +6,7 @@ use gleam_core::{
 };
 
 use crate::{
-    engine::{Engine, MainFunction}, error::{show_error, SgleamError}, filesystem::FileSystem, gleam::{compile, fn_type_to_string, get_module, type_to_string, Project}, repl::{welcome_message, Repl, ReplOutput}, repl_reader::ReplReader
+    engine::{Engine, MainFunction}, error::{show_error, SgleamError}, io::IO, gleam::{compile, fn_type_to_string, get_module, type_to_string, Project}, repl::{welcome_message, Repl, ReplOutput}, repl_reader::ReplReader
 };
 
 use crate::quickjs::QuickJsEngine as JsEngine;
@@ -139,8 +139,8 @@ pub fn get_smain(module: &Module) -> Result<MainFunction, SgleamError> {
     }
 }
 
-fn copy_files_and_build<FS: FileSystem>(
-    project: &mut Project<FS>,
+fn copy_files_and_build<I: IO>(
+    project: &mut Project<I>,
     paths: &[Utf8PathBuf],
 ) -> Result<Vec<Module>, gleam_core::Error> {
     for path in paths.iter().filter(|p| validade_path(p)) {

@@ -15,7 +15,7 @@ pub mod parser;
 pub mod quickjs;
 pub mod repl;
 pub mod run;
-pub mod filesystem;
+pub mod io;
 
 #[cfg(target_arch = "wasm32")]
 pub mod repl_reader_wasm;

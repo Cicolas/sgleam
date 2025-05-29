@@ -26,11 +26,11 @@ use std::{
 use tar::Archive;
 use termcolor::{Color, ColorSpec, WriteColor};
 
-use crate::{error::stderr_buffer_writer, filesystem::FileSystem, GLEAM_STDLIB, GLEAM_STDLIB_BIGINT};
+use crate::{error::stderr_buffer_writer, io::IO, GLEAM_STDLIB, GLEAM_STDLIB_BIGINT};
 
 #[derive(Clone)]
-pub struct Project<FS: FileSystem> {
-    pub fs: FS,
+pub struct Project<I: IO> {
+    pub fs: I,
 }
 
 fn stdlib() -> &'static [u8] {
@@ -56,7 +56,7 @@ impl Default for Project<InMemoryFileSystem> {
     }
 }
 
-impl<FS: FileSystem> Project<FS> {
+impl<I: IO> Project<I> {
     pub fn root() -> &'static Utf8Path {
         "/".into()
     }
@@ -74,7 +74,7 @@ impl<FS: FileSystem> Project<FS> {
     }
 
     pub fn write_source(&mut self, name: &str, content: &str) {
-        let path = Project::<FS>::source().join(name);
+        let path = Project::<I>::source().join(name);
         self.fs
             .write(&path, content)
             .expect("Write a file in memory");
@@ -95,7 +95,7 @@ impl<FS: FileSystem> Project<FS> {
     }
 
     pub fn write_out(&mut self, name: &str, content: &str) {
-        let path = Project::<FS>::out().join(name);
+        let path = Project::<I>::out().join(name);
         self.fs
             .write(&path, content)
             .expect("Write a file in memory");
@@ -141,7 +141,7 @@ pub fn get_args_names(fun: &Function<(), UntypedExpr>) -> Vec<String> {
 }
 
 // TODO: move this function to Project
-pub fn compile<FS: FileSystem>(project: &mut Project<FS>, repl: bool) -> Result<Vec<Module>, Error> {
+pub fn compile<I: IO>(project: &mut Project<I>, repl: bool) -> Result<Vec<Module>, Error> {
     let config = PackageConfig {
         target: Target::JavaScript,
         ..Default::default()
@@ -149,15 +149,15 @@ pub fn compile<FS: FileSystem>(project: &mut Project<FS>, repl: bool) -> Result<
 
     let target = TargetCodegenConfiguration::JavaScript {
         emit_typescript_definitions: false,
-        prelude_location: Project::<FS>::prelude().into(),
+        prelude_location: Project::<I>::prelude().into(),
     };
 
     let mut compiler = PackageCompiler::new(
         &config,
         Mode::Dev,
-        Project::<FS>::root(),
-        Project::<FS>::out(),
-        Project::<FS>::out(),
+        Project::<I>::root(),
+        Project::<I>::out(),
+        Project::<I>::out(),
         &target,
         UniqueIdGenerator::new(),
         project.fs.clone(),

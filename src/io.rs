@@ -3,7 +3,7 @@ use std::{collections::HashMap, time::SystemTime};
 use camino::{Utf8Path, Utf8PathBuf};
 use gleam_core::{io::{memory::InMemoryFileSystem, BeamCompiler, CommandExecutor, Content, FileSystemReader, FileSystemWriter}, Error};
 
-pub trait FileSystem: FileSystemReader + FileSystemWriter + CommandExecutor + BeamCompiler + Clone {
+pub trait IO: FileSystemReader + FileSystemWriter + CommandExecutor + BeamCompiler + Clone {
     fn new() -> Self;
 
     fn reset(&self);
@@ -22,7 +22,7 @@ pub trait FileSystem: FileSystemReader + FileSystemWriter + CommandExecutor + Be
     ) -> Result<(), Error>;
 }
 
-impl FileSystem for InMemoryFileSystem {
+impl IO for InMemoryFileSystem {
     fn new() -> Self {
         InMemoryFileSystem::new()
     }
