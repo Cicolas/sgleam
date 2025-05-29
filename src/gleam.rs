@@ -78,9 +78,6 @@ impl<I: IO> Project<I> {
         self.fs
             .write(&path, content)
             .expect("Write a file in memory");
-        self.fs
-            .try_set_modification_time(&path, SystemTime::now())
-            .expect("Set modification time of a file in memory")
     }
 
     pub fn copy_file_to_source(&mut self, input: &Utf8Path) -> Result<(), Error> {
