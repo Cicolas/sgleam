@@ -21,7 +21,7 @@ use std::{
     path::PathBuf,
     rc::Rc,
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 use tar::Archive;
 use termcolor::{Color, ColorSpec, WriteColor};
@@ -47,8 +47,12 @@ impl Default for Project<InMemoryFileSystem> {
             fs: InMemoryFileSystem::new(),
         };
 
-        extract_tar(&mut project.fs, Archive::new(stdlib()), Project::<InMemoryFileSystem>::source())
-            .expect("Extract stdlib");
+        extract_tar(
+            &mut project.fs,
+            Archive::new(stdlib()),
+            Project::<InMemoryFileSystem>::source(),
+        )
+        .expect("Extract stdlib");
         project.write_source("sgleam/check.gleam", crate::SGLEAM_CHECK);
         project.write_source("sgleam_ffi.mjs", crate::SGLEAM_FFI_MJS);
         project.write_out("prelude.mjs", gleam_core::javascript::prelude());

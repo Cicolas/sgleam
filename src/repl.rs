@@ -147,7 +147,7 @@ impl<E: Engine<I>, I: IO> Repl<E, I> {
 
         self.project
             .fs
-            .delete_file(&Project::<InMemoryFileSystem>::source().join(file))
+            .delete_file(&Project::<I>::source().join(file))
             .expect("To delete repl file");
 
         let mut modules = result?;
