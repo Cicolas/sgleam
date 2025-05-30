@@ -1,13 +1,21 @@
 use std::{collections::HashMap, fmt::Write};
 
 use gleam_core::{
-    ast::{Definition, Pattern, Statement, TargetedDefinition, UntypedStatement}, build::Module, io::memory::{InMemoryFileSystem}, Error
+    ast::{Definition, Pattern, Statement, TargetedDefinition, UntypedStatement},
+    build::Module,
+    Error,
 };
 use indoc::formatdoc;
 use vec1::Vec1;
 
 use crate::{
-    engine::{Engine, MainFunction, REPL_MAIN}, error::SgleamError, io::IO, gleam::{compile, get_args_names, get_definition_src, type_to_string, Project}, parser::{self, ReplItem}, run::get_function, swrite, swriteln, GLEAM_MODULES_NAMES
+    engine::{Engine, MainFunction, REPL_MAIN},
+    error::SgleamError,
+    gleam::{compile, get_args_names, get_definition_src, type_to_string, Project},
+    io::IO,
+    parser::{self, ReplItem},
+    run::get_function,
+    swrite, swriteln, GLEAM_MODULES_NAMES,
 };
 
 const REPL_SAVE_LOAD_FNS: &str = r#"
@@ -54,7 +62,10 @@ struct Value {
 }
 
 impl<E: Engine<I>, I: IO> Repl<E, I> {
-    pub fn new(project: Project<I>, user_module: Option<&Module>) -> Result<Repl<E, I>, SgleamError> {
+    pub fn new(
+        project: Project<I>,
+        user_module: Option<&Module>,
+    ) -> Result<Repl<E, I>, SgleamError> {
         let imports = GLEAM_MODULES_NAMES.iter().map(|s| s.to_string()).collect();
         let fs = project.fs.clone();
         Ok(Repl {

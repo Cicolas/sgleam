@@ -2,11 +2,17 @@ use camino::{Utf8Path, Utf8PathBuf};
 
 use gleam_core::{
     ast::{TypedDefinition, TypedFunction},
-    build::{Module, Target}, io::memory::InMemoryFileSystem,
+    build::{Module, Target},
+    io::memory::InMemoryFileSystem,
 };
 
 use crate::{
-    engine::{Engine, MainFunction}, error::{show_error, SgleamError}, io::IO, gleam::{compile, fn_type_to_string, get_module, type_to_string, Project}, repl::{welcome_message, Repl, ReplOutput}, repl_reader::ReplReader
+    engine::{Engine, MainFunction},
+    error::{show_error, SgleamError},
+    gleam::{compile, fn_type_to_string, get_module, type_to_string, Project},
+    io::IO,
+    repl::{welcome_message, Repl, ReplOutput},
+    repl_reader::ReplReader,
 };
 
 use crate::quickjs::QuickJsEngine as JsEngine;

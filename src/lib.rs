@@ -9,13 +9,13 @@ pub mod engine;
 pub mod error;
 pub mod format;
 pub mod gleam;
+pub mod io;
 pub mod logger;
 pub mod panic;
 pub mod parser;
 pub mod quickjs;
 pub mod repl;
 pub mod run;
-pub mod io;
 
 #[cfg(target_arch = "wasm32")]
 pub mod repl_reader_wasm;
@@ -101,7 +101,10 @@ fn new_string(ptr: *mut u8, len: usize) -> String {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn repl_new(str: *mut u8, len: usize) -> *mut Repl<QuickJsEngine, InMemoryFileSystem> {
+pub unsafe extern "C" fn repl_new(
+    str: *mut u8,
+    len: usize,
+) -> *mut Repl<QuickJsEngine, InMemoryFileSystem> {
     let mut project = Project::default();
     project.write_source("user.gleam", &new_string(str, len));
     let modules = match compile(&mut project, false) {
