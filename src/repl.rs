@@ -68,6 +68,8 @@ impl<E: Engine<I>, I: IO> Repl<E, I> {
     ) -> Result<Repl<E, I>, SgleamError> {
         let imports = GLEAM_MODULES_NAMES.iter().map(|s| s.to_string()).collect();
         let fs = project.fs.clone();
+        let base_path = project.out().clone();
+
         Ok(Repl {
             user_import: user_module.map(import_public_types_and_values),
             imports,
@@ -76,7 +78,7 @@ impl<E: Engine<I>, I: IO> Repl<E, I> {
             fns: HashMap::new(),
             vars: HashMap::new(),
             project,
-            engine: E::new(fs),
+            engine: E::new(fs, base_path.into()),
             iter: (0, 0),
             var_index: 0,
         })
@@ -158,7 +160,7 @@ impl<E: Engine<I>, I: IO> Repl<E, I> {
 
         self.project
             .fs
-            .delete_file(&Project::<I>::source().join(file))
+            .delete_file(&self.project.source().join(file))
             .expect("To delete repl file");
 
         let mut modules = result?;

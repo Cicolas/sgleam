@@ -32,7 +32,7 @@ pub fn run_interative(paths: &[Utf8PathBuf], quiet: bool) -> Result<(), SgleamEr
         get_module(&modules, &name)
     });
 
-    let mut repl = Repl::<JsEngine, InMemoryFileSystem>::new(project, module)?;
+    let mut repl = Repl::<JsEngine<InMemoryFileSystem>, InMemoryFileSystem>::new(project, module)?;
     for input in ReplReader::new()? {
         match repl.run(&input) {
             Err(err) => show_error(&err),
@@ -49,10 +49,12 @@ pub fn run_main(paths: &[Utf8PathBuf]) -> Result<(), SgleamError> {
     let modules = copy_files_and_build(&mut project, paths)?;
     let name = paths[0].with_extension("");
     let name = name.as_str().replace('\\', "/");
+    let base_path = project.out().clone();
 
     if let Some(module) = get_module(&modules, &name) {
         let main = get_main(module)?;
-        JsEngine::new(project.fs.clone()).run_main(&module.name, main, main != MainFunction::Main);
+        JsEngine::new(project.fs.clone(), base_path.into())
+            .run_main(&module.name, main, main != MainFunction::Main);
     } else {
         // The compiler ignored the file because of the name and printed a warning.
     }
@@ -84,7 +86,9 @@ pub fn run_test(user_files: &[Utf8PathBuf], paths: &[Utf8PathBuf]) -> Result<(),
         })
         .collect();
 
-    JsEngine::new(project.fs.clone()).run_tests(&modules);
+    let base_path = project.out().clone();
+    JsEngine::new(project.fs.clone(), base_path.into())
+        .run_tests(&modules);
     Ok(())
 }
 

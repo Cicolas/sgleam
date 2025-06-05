@@ -104,7 +104,7 @@ fn new_string(ptr: *mut u8, len: usize) -> String {
 pub unsafe extern "C" fn repl_new(
     str: *mut u8,
     len: usize,
-) -> *mut Repl<QuickJsEngine, InMemoryFileSystem> {
+) -> *mut Repl<QuickJsEngine<InMemoryFileSystem>, InMemoryFileSystem> {
     let mut project = Project::default();
     project.write_source("user.gleam", &new_string(str, len));
     let modules = match compile(&mut project, false) {
@@ -121,7 +121,7 @@ pub unsafe extern "C" fn repl_new(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn repl_destroy(repl: *mut Repl<QuickJsEngine, InMemoryFileSystem>) {
+pub unsafe extern "C" fn repl_destroy(repl: *mut Repl<QuickJsEngine<InMemoryFileSystem>, InMemoryFileSystem>) {
     unsafe {
         let _ = Box::from_raw(repl);
     };
@@ -129,7 +129,7 @@ pub unsafe extern "C" fn repl_destroy(repl: *mut Repl<QuickJsEngine, InMemoryFil
 
 #[no_mangle]
 pub unsafe extern "C" fn repl_run(
-    repl: *mut Repl<QuickJsEngine, InMemoryFileSystem>,
+    repl: *mut Repl<QuickJsEngine<InMemoryFileSystem>, InMemoryFileSystem>,
     str: *mut u8,
     len: usize,
 ) -> bool {

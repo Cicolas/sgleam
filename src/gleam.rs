@@ -16,12 +16,7 @@ use gleam_core::{
     Error, Warning,
 };
 use std::{
-    collections::{HashSet, VecDeque},
-    io::{Read, Write},
-    path::PathBuf,
-    rc::Rc,
-    sync::Arc,
-    time::{Duration, Instant},
+    collections::{HashSet, VecDeque}, io::{Read, Write}, path::PathBuf, rc::Rc, sync::Arc, time::{Duration, Instant}
 };
 use tar::Archive;
 use termcolor::{Color, ColorSpec, WriteColor};
@@ -30,6 +25,7 @@ use crate::{error::stderr_buffer_writer, io::IO, GLEAM_STDLIB, GLEAM_STDLIB_BIGI
 
 #[derive(Clone)]
 pub struct Project<I: IO> {
+    pub root: &'static Utf8Path,
     pub fs: I,
 }
 
@@ -44,13 +40,16 @@ fn stdlib() -> &'static [u8] {
 impl Default for Project<InMemoryFileSystem> {
     fn default() -> Project<InMemoryFileSystem> {
         let mut project = Project {
+            root: "/".into(),
             fs: InMemoryFileSystem::new(),
         };
+
+        let to_path = &project.source();
 
         extract_tar(
             &mut project.fs,
             Archive::new(stdlib()),
-            Project::<InMemoryFileSystem>::source(),
+            to_path,
         )
         .expect("Extract stdlib");
         project.write_source("sgleam/check.gleam", crate::SGLEAM_CHECK);
@@ -61,24 +60,24 @@ impl Default for Project<InMemoryFileSystem> {
 }
 
 impl<I: IO> Project<I> {
-    pub fn root() -> &'static Utf8Path {
-        "/".into()
+    pub fn root(&self) -> Utf8PathBuf {
+        self.root.into()
     }
 
-    pub fn source() -> &'static Utf8Path {
-        "/src".into()
+    pub fn source(&self) -> Utf8PathBuf {
+        self.root.join("/src")
     }
 
-    pub fn out() -> &'static Utf8Path {
-        "/build".into()
+    pub fn out(&self) -> Utf8PathBuf {
+        self.root.join("/build")
     }
 
-    pub fn prelude() -> &'static Utf8Path {
-        "/build/prelude.mjs".into()
+    pub fn prelude(&self) -> Utf8PathBuf {
+        self.root.join("/build/prelude.mjs")
     }
 
     pub fn write_source(&mut self, name: &str, content: &str) {
-        let path = Project::<I>::source().join(name);
+        let path = self.source().join(name);
         self.fs
             .write(&path, content)
             .expect("Write a file in memory");
@@ -96,7 +95,7 @@ impl<I: IO> Project<I> {
     }
 
     pub fn write_out(&mut self, name: &str, content: &str) {
-        let path = Project::<I>::out().join(name);
+        let path = self.out().join(name);
         self.fs
             .write(&path, content)
             .expect("Write a file in memory");
@@ -148,17 +147,21 @@ pub fn compile<I: IO>(project: &mut Project<I>, repl: bool) -> Result<Vec<Module
         ..Default::default()
     };
 
+    let root_path = project.root();
+    let out_path = project.out();
+    let prelude_path = project.prelude();
+
     let target = TargetCodegenConfiguration::JavaScript {
         emit_typescript_definitions: false,
-        prelude_location: Project::<I>::prelude().into(),
+        prelude_location: prelude_path.into(),
     };
 
     let mut compiler = PackageCompiler::new(
         &config,
         Mode::Dev,
-        Project::<I>::root(),
-        Project::<I>::out(),
-        Project::<I>::out(),
+        root_path.as_path(),
+        out_path.as_path(),
+        out_path.as_path(), // Assuming the third path (often for libraries) is also the output path
         &target,
         UniqueIdGenerator::new(),
         project.fs.clone(),

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::io::IO;
 
 pub const REPL_MAIN: &str = "repl_main";
@@ -21,7 +23,7 @@ impl MainFunction {
 }
 
 pub trait Engine<I: IO>: Clone {
-    fn new(fs: I) -> Self;
+    fn new(fs: I, base_path: PathBuf) -> Self;
 
     fn run_main(&self, module: &str, main: MainFunction, show_output: bool);
 

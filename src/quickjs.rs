@@ -1,11 +1,7 @@
-use gleam_core::io::{memory::InMemoryFileSystem, FileSystemReader};
 use indoc::formatdoc;
 
 use std::{
-    fmt::Write as _,
-    io::Write as _,
-    path::{Component, Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
+    fmt::Write as _, io::Write as _, marker::PhantomData, path::{Component, Path, PathBuf}, sync::atomic::{AtomicBool, Ordering}
 };
 
 use rquickjs::{
@@ -18,23 +14,27 @@ use rquickjs::{
 };
 
 use crate::{
-    engine::{Engine, MainFunction},
-    gleam::Project,
-    swriteln, STACK_SIZE,
+    engine::{Engine, MainFunction}, io::IO, swriteln, STACK_SIZE
 };
 
 #[derive(Clone)]
-pub struct QuickJsEngine {
+pub struct QuickJsEngine<I: IO + 'static> {
     context: Context,
+    // TODO: remove PhantomData<I>
+    // ! PhantomData is used here to avoid Rust check from complaining 
+    // ! the absence of I usage, tho it is used inside Context struct,
+    // ! but rquickjs doesn't expose this type as a generic 
+    phantom_data: PhantomData<I>, 
 }
 
-impl Engine<InMemoryFileSystem> for QuickJsEngine {
-    fn new(fs: InMemoryFileSystem) -> Self {
+impl<I: IO + 'static> Engine<I> for QuickJsEngine<I> {
+    fn new(fs: I, base_path: PathBuf) -> Self {
         #[cfg(not(target_arch = "wasm32"))]
         ctrlc::set_handler(interrupt).expect("Add crtlc handlers");
 
         QuickJsEngine {
-            context: create_context(fs, Project::<InMemoryFileSystem>::out().into()).unwrap(),
+            context: create_context(fs, base_path).unwrap(),
+            phantom_data: PhantomData
         }
     }
 
@@ -82,7 +82,7 @@ fn check_interrupt() -> bool {
     STOP.swap(false, Ordering::Relaxed)
 }
 
-pub fn create_context(fs: InMemoryFileSystem, base: PathBuf) -> Result<Context> {
+pub fn create_context<I: IO + 'static>(fs: I, base: PathBuf) -> Result<Context> {
     let runtime = Runtime::new()?;
     runtime.set_max_stack_size(STACK_SIZE - 1024 * 1024);
     runtime.set_interrupt_handler(Some(Box::new(check_interrupt)));
@@ -250,11 +250,11 @@ fn resolve_path(path: &Path) -> PathBuf {
     components.iter().collect()
 }
 
-struct ScriptLoader {
-    fs: InMemoryFileSystem,
+struct ScriptLoader<I: IO + 'static> {
+    fs: I,
 }
 
-impl Loader for ScriptLoader {
+impl<I: IO> Loader for ScriptLoader<I> {
     fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js, Declared>> {
         tracing::debug!("Loading {path}");
         let src = self
