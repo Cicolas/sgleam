@@ -16,7 +16,12 @@ use gleam_core::{
     Error, Warning,
 };
 use std::{
-    collections::{HashSet, VecDeque}, io::{Read, Write}, path::PathBuf, rc::Rc, sync::Arc, time::{Duration, Instant}
+    collections::{HashSet, VecDeque},
+    io::{Read, Write},
+    path::PathBuf,
+    rc::Rc,
+    sync::Arc,
+    time::{Duration, Instant},
 };
 use tar::Archive;
 use termcolor::{Color, ColorSpec, WriteColor};
@@ -46,12 +51,7 @@ impl Default for Project<InMemoryFileSystem> {
 
         let to_path = &project.source();
 
-        extract_tar(
-            &mut project.fs,
-            Archive::new(stdlib()),
-            to_path,
-        )
-        .expect("Extract stdlib");
+        extract_tar(&mut project.fs, Archive::new(stdlib()), to_path).expect("Extract stdlib");
         project.write_source("sgleam/check.gleam", crate::SGLEAM_CHECK);
         project.write_source("sgleam_ffi.mjs", crate::SGLEAM_FFI_MJS);
         project.write_out("prelude.mjs", gleam_core::javascript::prelude());

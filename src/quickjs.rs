@@ -1,7 +1,11 @@
 use indoc::formatdoc;
 
 use std::{
-    fmt::Write as _, io::Write as _, marker::PhantomData, path::{Component, Path, PathBuf}, sync::atomic::{AtomicBool, Ordering}
+    fmt::Write as _,
+    io::Write as _,
+    marker::PhantomData,
+    path::{Component, Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use rquickjs::{
@@ -14,17 +18,19 @@ use rquickjs::{
 };
 
 use crate::{
-    engine::{Engine, MainFunction}, io::IO, swriteln, STACK_SIZE
+    engine::{Engine, MainFunction},
+    io::IO,
+    swriteln, STACK_SIZE,
 };
 
 #[derive(Clone)]
 pub struct QuickJsEngine<I: IO + 'static> {
     context: Context,
     // TODO: remove PhantomData<I>
-    // ! PhantomData is used here to avoid Rust check from complaining 
+    // ! PhantomData is used here to avoid Rust check from complaining
     // ! the absence of I usage, tho it is used inside Context struct,
-    // ! but rquickjs doesn't expose this type as a generic 
-    phantom_data: PhantomData<I>, 
+    // ! but rquickjs doesn't expose this type as a generic
+    phantom_data: PhantomData<I>,
 }
 
 impl<I: IO + 'static> Engine<I> for QuickJsEngine<I> {
@@ -34,7 +40,7 @@ impl<I: IO + 'static> Engine<I> for QuickJsEngine<I> {
 
         QuickJsEngine {
             context: create_context(fs, base_path).unwrap(),
-            phantom_data: PhantomData
+            phantom_data: PhantomData,
         }
     }
 

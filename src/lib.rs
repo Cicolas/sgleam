@@ -121,7 +121,9 @@ pub unsafe extern "C" fn repl_new(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn repl_destroy(repl: *mut Repl<QuickJsEngine<InMemoryFileSystem>, InMemoryFileSystem>) {
+pub unsafe extern "C" fn repl_destroy(
+    repl: *mut Repl<QuickJsEngine<InMemoryFileSystem>, InMemoryFileSystem>,
+) {
     unsafe {
         let _ = Box::from_raw(repl);
     };
