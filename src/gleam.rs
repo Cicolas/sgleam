@@ -7,7 +7,7 @@ use gleam_core::{
     },
     config::PackageConfig,
     error::{FileIoAction, FileKind},
-    io::{memory::InMemoryFileSystem, FileSystemWriter},
+    io::memory::InMemoryFileSystem,
     javascript::is_bigint_enabled,
     parse::parse_module,
     type_::{printer::Printer, Type},
@@ -26,7 +26,7 @@ use std::{
 use tar::Archive;
 use termcolor::{Color, ColorSpec, WriteColor};
 
-use crate::{error::stderr_buffer_writer, io::IO, GLEAM_STDLIB, GLEAM_STDLIB_BIGINT};
+use crate::{error::stderr_buffer_writer, fs::ProjectIO, io::IO, GLEAM_STDLIB, GLEAM_STDLIB_BIGINT};
 
 #[derive(Clone)]
 pub struct Project<I: IO> {
@@ -47,6 +47,23 @@ impl Default for Project<InMemoryFileSystem> {
         let mut project = Project {
             root: "/".into(),
             fs: InMemoryFileSystem::new(),
+        };
+
+        let to_path = &project.source();
+
+        extract_tar(&mut project.fs, Archive::new(stdlib()), to_path).expect("Extract stdlib");
+        project.write_source("sgleam/check.gleam", crate::SGLEAM_CHECK);
+        project.write_source("sgleam_ffi.mjs", crate::SGLEAM_FFI_MJS);
+        project.write_out("prelude.mjs", gleam_core::javascript::prelude());
+        project
+    }
+}
+
+impl Default for Project<ProjectIO> {
+    fn default() -> Project<ProjectIO> {
+        let mut project = Project {
+            root: "/".into(),
+            fs: ProjectIO::new(),
         };
 
         let to_path = &project.source();
@@ -229,8 +246,8 @@ pub fn find_imports(paths: Vec<Utf8PathBuf>) -> Result<Vec<Utf8PathBuf>, gleam_c
     Ok(files)
 }
 
-fn extract_tar(
-    fs: &mut InMemoryFileSystem,
+fn extract_tar<I: IO>(
+    fs: &mut I,
     mut arch: Archive<&[u8]>,
     to: &Utf8Path,
 ) -> Result<(), Error> {

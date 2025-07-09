@@ -45,7 +45,7 @@ pub fn run_interative(paths: &[Utf8PathBuf], quiet: bool) -> Result<(), SgleamEr
 }
 
 pub fn run_main(paths: &[Utf8PathBuf]) -> Result<(), SgleamError> {
-    let mut project = Project::default();
+    let mut project = Project::<InMemoryFileSystem>::default();
     let modules = copy_files_and_build(&mut project, paths)?;
     let name = paths[0].with_extension("");
     let name = name.as_str().replace('\\', "/");
@@ -53,7 +53,8 @@ pub fn run_main(paths: &[Utf8PathBuf]) -> Result<(), SgleamError> {
 
     if let Some(module) = get_module(&modules, &name) {
         let main = get_main(module)?;
-        JsEngine::new(project.fs.clone(), base_path.into()).run_main(
+        JsEngine::new(project.fs.clone(), base_path.into())
+            .run_main(
             &module.name,
             main,
             main != MainFunction::Main,
@@ -66,12 +67,12 @@ pub fn run_main(paths: &[Utf8PathBuf]) -> Result<(), SgleamError> {
 }
 
 pub fn run_check(paths: &[Utf8PathBuf]) -> Result<(), SgleamError> {
-    let mut project = Project::default();
+    let mut project = Project::<InMemoryFileSystem>::default();
     Ok(copy_files_and_build(&mut project, paths).map(|_| ())?)
 }
 
 pub fn run_test(user_files: &[Utf8PathBuf], paths: &[Utf8PathBuf]) -> Result<(), SgleamError> {
-    let mut project = Project::default();
+    let mut project = Project::<InMemoryFileSystem>::default();
     let modules = copy_files_and_build(&mut project, paths)?;
     let modules: Vec<_> = modules
         .iter()
