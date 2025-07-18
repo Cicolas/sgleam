@@ -1,0 +1,491 @@
+use gleam_core::{
+    Result, error::{Error, FileIoAction, FileKind, OS, ShellCommandFailureReason, parse_os},
+    io::{
+        BeamCompiler, Command, CommandExecutor, Content, DirEntry, FileSystemReader,
+        FileSystemWriter, OutputFile, ReadDir, Stdio, WrappedReader,
+    },
+};
+use std::{
+    collections::HashSet,
+    fmt::Debug,
+    fs::File,
+    io::{self, Write},
+    time::SystemTime,
+};
+
+use camino::{ReadDirUtf8, Utf8Path, Utf8PathBuf};
+
+/// Return the current directory as a UTF-8 Path
+pub fn get_current_directory() -> Result<Utf8PathBuf, Error> {
+    let curr_dir = std::env::current_dir().map_err(|e| Error::FileIo {
+        kind: FileKind::Directory,
+        action: FileIoAction::Open,
+        path: ".".into(),
+        err: Some(e.to_string()),
+    })?;
+    Utf8PathBuf::from_path_buf(curr_dir.clone()).map_err(|_| Error::NonUtf8Path { path: curr_dir })
+}
+
+// Return the first directory with a gleam.toml as a UTF-8 Path
+pub fn get_project_root(path: Utf8PathBuf) -> Result<Utf8PathBuf, Error> {
+    fn walk(dir: Utf8PathBuf) -> Option<Utf8PathBuf> {
+        match dir.join("gleam.toml").is_file() {
+            true => Some(dir),
+            false => match dir.parent() {
+                Some(p) => walk(p.into()),
+                None => None,
+            },
+        }
+    }
+    walk(path.clone()).ok_or(Error::UnableToFindProjectRoot {
+        path: path.to_string(),
+    })
+}
+
+pub fn get_os() -> OS {
+    parse_os(std::env::consts::OS, get_distro_str().as_str())
+}
+
+// try to extract the distro id from /etc/os-release
+pub fn extract_distro_id(os_release: String) -> String {
+    let distro = os_release.lines().find(|line| line.starts_with("ID="));
+    if let Some(distro) = distro {
+        let id = distro.split('=').nth(1).unwrap_or("").replace("\"", "");
+        return id;
+    }
+    "".to_string()
+}
+
+pub fn get_distro_str() -> String {
+    let path = Utf8Path::new("/etc/os-release");
+    if std::env::consts::OS != "linux" || !path.exists() {
+        return "other".to_string();
+    }
+    let os_release = read(path);
+    match os_release {
+        Ok(os_release) => extract_distro_id(os_release),
+        Err(_) => "other".to_string(),
+    }
+}
+
+/// A `FileWriter` implementation that writes to the file system.
+#[derive(Debug, Clone, Default)]
+pub struct ProjectIO {
+    // beam_compiler: Arc<Mutex<crate::beam_compiler::BeamCompiler>>,
+}
+
+impl ProjectIO {
+    pub fn new() -> Self {
+        Self {
+            // beam_compiler: Default::default(),
+        }
+    }
+
+    pub fn boxed() -> Box<Self> {
+        Box::new(Self::new())
+    }
+}
+
+impl FileSystemReader for ProjectIO {
+    fn read(&self, path: &Utf8Path) -> Result<String, Error> {
+        read(path)
+    }
+
+    fn read_bytes(&self, path: &Utf8Path) -> Result<Vec<u8>, Error> {
+        read_bytes(path)
+    }
+
+    fn is_file(&self, path: &Utf8Path) -> bool {
+        path.is_file()
+    }
+
+    fn is_directory(&self, path: &Utf8Path) -> bool {
+        path.is_dir()
+    }
+
+    fn reader(&self, path: &Utf8Path) -> Result<WrappedReader, Error> {
+        reader(path)
+    }
+
+    fn read_dir(&self, path: &Utf8Path) -> Result<ReadDir> {
+        read_dir(path).map(|entries| {
+            entries
+                .map(|result| result.map(|entry| DirEntry::from_path(entry.path())))
+                .collect()
+        })
+    }
+
+    fn modification_time(&self, path: &Utf8Path) -> Result<SystemTime, Error> {
+        path.metadata()
+            .map(|m| m.modified().unwrap_or_else(|_| SystemTime::now()))
+            .map_err(|e| Error::FileIo {
+                action: FileIoAction::ReadMetadata,
+                kind: FileKind::File,
+                path: path.to_path_buf(),
+                err: Some(e.to_string()),
+            })
+    }
+
+    fn canonicalise(&self, path: &Utf8Path) -> Result<Utf8PathBuf, Error> {
+        canonicalise(path)
+    }
+}
+
+impl FileSystemWriter for ProjectIO {
+    fn delete_directory(&self, path: &Utf8Path) -> Result<()> {
+        delete_directory(path)
+    }
+
+    fn copy(&self, from: &Utf8Path, to: &Utf8Path) -> Result<()> {
+        copy(from, to)
+    }
+
+    fn copy_dir(&self, from: &Utf8Path, to: &Utf8Path) -> Result<()> {
+        copy_dir(from, to)
+    }
+
+    fn mkdir(&self, path: &Utf8Path) -> Result<(), Error> {
+        mkdir(path)
+    }
+
+    fn hardlink(&self, from: &Utf8Path, to: &Utf8Path) -> Result<(), Error> {
+        hardlink(from, to)
+    }
+
+    fn symlink_dir(&self, from: &Utf8Path, to: &Utf8Path) -> Result<(), Error> {
+        symlink_dir(from, to)
+    }
+
+    fn delete_file(&self, path: &Utf8Path) -> Result<()> {
+        delete_file(path)
+    }
+
+    fn write(&self, path: &Utf8Path, content: &str) -> Result<(), Error> {
+        write(path, content)
+    }
+
+    fn write_bytes(&self, path: &Utf8Path, content: &[u8]) -> Result<(), Error> {
+        write_bytes(path, content)
+    }
+
+    fn exists(&self, path: &Utf8Path) -> bool {
+        path.exists()
+    }
+}
+
+impl CommandExecutor for ProjectIO {
+    fn exec(&self, command: Command) -> Result<i32, Error> {
+        let Command {
+            program,
+            args,
+            env,
+            cwd,
+            stdio,
+        } = command;
+        tracing::trace!(program=program, args=?args.join(" "), env=?env, cwd=?cwd, "command_exec");
+        let result = std::process::Command::new(&program)
+            .args(args)
+            .stdin(stdio.get_process_stdio())
+            .stdout(stdio.get_process_stdio())
+            .envs(env.iter().map(|pair| (&pair.0, &pair.1)))
+            .current_dir(cwd.unwrap_or_else(|| Utf8Path::new("./").to_path_buf()))
+            .status();
+
+        match result {
+            Ok(status) => Ok(status.code().unwrap_or_default()),
+
+            Err(error) => Err(match error.kind() {
+                io::ErrorKind::NotFound => Error::ShellProgramNotFound {
+                    program,
+                    os: get_os(),
+                },
+
+                other => Error::ShellCommand {
+                    program,
+                    reason: ShellCommandFailureReason::IoError(other),
+                },
+            }),
+        }
+    }
+}
+
+impl BeamCompiler for ProjectIO {
+    fn compile_beam(
+        &self,
+        _out: &Utf8Path,
+        _lib: &Utf8Path,
+        _modules: &HashSet<Utf8PathBuf>,
+        _stdio: Stdio,
+    ) -> Result<Vec<String>, Error> {
+        // self.beam_compiler
+        //     .lock()
+        //     .as_mut()
+        //     .expect("could not get beam_compiler")
+        //     .compile(self, out, lib, modules, stdio)
+        Ok(vec![])
+    }
+}
+
+pub fn delete_directory(dir: &Utf8Path) -> Result<(), Error> {
+    tracing::trace!(path=?dir, "deleting_directory");
+    if dir.exists() {
+        std::fs::remove_dir_all(dir).map_err(|e| Error::FileIo {
+            action: FileIoAction::Delete,
+            kind: FileKind::Directory,
+            path: dir.to_path_buf(),
+            err: Some(e.to_string()),
+        })?;
+    } else {
+        tracing::trace!(path=?dir, "directory_did_not_exist_for_deletion");
+    }
+    Ok(())
+}
+
+pub fn delete_file(file: &Utf8Path) -> Result<(), Error> {
+    tracing::trace!("Deleting file {:?}", file);
+    if file.exists() {
+        std::fs::remove_file(file).map_err(|e| Error::FileIo {
+            action: FileIoAction::Delete,
+            kind: FileKind::File,
+            path: file.to_path_buf(),
+            err: Some(e.to_string()),
+        })?;
+    } else {
+        tracing::trace!("Did not exist for deletion: {:?}", file);
+    }
+    Ok(())
+}
+
+pub fn write_outputs_under(outputs: &[OutputFile], base: &Utf8Path) -> Result<(), Error> {
+    for file in outputs {
+        let path = base.join(&file.path);
+        match &file.content {
+            Content::Binary(buffer) => write_bytes(&path, buffer),
+            Content::Text(buffer) => write(&path, buffer),
+        }?;
+    }
+    Ok(())
+}
+
+pub fn write_output(file: &OutputFile) -> Result<(), Error> {
+    let OutputFile { path, content } = file;
+    match content {
+        Content::Binary(buffer) => write_bytes(path, buffer),
+        Content::Text(buffer) => write(path, buffer),
+    }
+}
+
+pub fn write(path: &Utf8Path, text: &str) -> Result<(), Error> {
+    write_bytes(path, text.as_bytes())
+}
+
+#[cfg(target_family = "unix")]
+pub fn make_executable(path: impl AsRef<Utf8Path>) -> Result<(), Error> {
+    use std::os::unix::fs::PermissionsExt;
+    tracing::trace!(path = ?path.as_ref(), "setting_permissions");
+
+    std::fs::set_permissions(path.as_ref(), std::fs::Permissions::from_mode(0o755)).map_err(
+        |e| Error::FileIo {
+            action: FileIoAction::UpdatePermissions,
+            kind: FileKind::File,
+            path: path.as_ref().to_path_buf(),
+            err: Some(e.to_string()),
+        },
+    )?;
+    Ok(())
+}
+
+#[cfg(not(target_family = "unix"))]
+pub fn make_executable(_path: impl AsRef<Utf8Path>) -> Result<(), Error> {
+    Ok(())
+}
+
+pub fn write_bytes(path: &Utf8Path, bytes: &[u8]) -> Result<(), Error> {
+    tracing::trace!(path=?path, "writing_file");
+
+    let dir_path = path.parent().ok_or_else(|| Error::FileIo {
+        action: FileIoAction::FindParent,
+        kind: FileKind::Directory,
+        path: path.to_path_buf(),
+        err: None,
+    })?;
+
+    std::fs::create_dir_all(dir_path).map_err(|e| Error::FileIo {
+        action: FileIoAction::Create,
+        kind: FileKind::Directory,
+        path: dir_path.to_path_buf(),
+        err: Some(e.to_string()),
+    })?;
+
+    let mut f = File::create(path).map_err(|e| Error::FileIo {
+        action: FileIoAction::Create,
+        kind: FileKind::File,
+        path: path.to_path_buf(),
+        err: Some(e.to_string()),
+    })?;
+
+    f.write_all(bytes).map_err(|e| Error::FileIo {
+        action: FileIoAction::WriteTo,
+        kind: FileKind::File,
+        path: path.to_path_buf(),
+        err: Some(e.to_string()),
+    })?;
+    Ok(())
+}
+
+pub fn mkdir(path: impl AsRef<Utf8Path> + Debug) -> Result<(), Error> {
+    if path.as_ref().exists() {
+        return Ok(());
+    }
+
+    tracing::trace!(path=?path, "creating_directory");
+
+    std::fs::create_dir_all(path.as_ref()).map_err(|err| Error::FileIo {
+        kind: FileKind::Directory,
+        path: Utf8PathBuf::from(path.as_ref()),
+        action: FileIoAction::Create,
+        err: Some(err.to_string()),
+    })
+}
+
+pub fn read_dir(path: impl AsRef<Utf8Path> + Debug) -> Result<ReadDirUtf8, Error> {
+    tracing::trace!(path=?path,"reading_directory");
+
+    Utf8Path::read_dir_utf8(path.as_ref()).map_err(|e| Error::FileIo {
+        action: FileIoAction::Read,
+        kind: FileKind::Directory,
+        path: Utf8PathBuf::from(path.as_ref()),
+        err: Some(e.to_string()),
+    })
+}
+
+pub fn module_caches_paths(
+    path: impl AsRef<Utf8Path> + Debug,
+) -> Result<impl Iterator<Item = Utf8PathBuf>, Error> {
+    Ok(read_dir(path)?
+        .filter_map(Result::ok)
+        .map(|f| f.into_path())
+        .filter(|p| p.extension() == Some("cache")))
+}
+
+pub fn read(path: impl AsRef<Utf8Path> + Debug) -> Result<String, Error> {
+    tracing::trace!(path=?path,"reading_file");
+
+    std::fs::read_to_string(path.as_ref()).map_err(|err| Error::FileIo {
+        action: FileIoAction::Read,
+        kind: FileKind::File,
+        path: Utf8PathBuf::from(path.as_ref()),
+        err: Some(err.to_string()),
+    })
+}
+
+pub fn read_bytes(path: impl AsRef<Utf8Path> + Debug) -> Result<Vec<u8>, Error> {
+    tracing::trace!(path=?path,"reading_file");
+
+    std::fs::read(path.as_ref()).map_err(|err| Error::FileIo {
+        action: FileIoAction::Read,
+        kind: FileKind::File,
+        path: Utf8PathBuf::from(path.as_ref()),
+        err: Some(err.to_string()),
+    })
+}
+
+pub fn reader(path: impl AsRef<Utf8Path> + Debug) -> Result<WrappedReader, Error> {
+    tracing::trace!(path=?path,"opening_file_reader");
+
+    let reader = File::open(path.as_ref()).map_err(|err| Error::FileIo {
+        action: FileIoAction::Open,
+        kind: FileKind::File,
+        path: Utf8PathBuf::from(path.as_ref()),
+        err: Some(err.to_string()),
+    })?;
+
+    Ok(WrappedReader::new(path.as_ref(), Box::new(reader)))
+}
+
+pub fn copy(
+    path: impl AsRef<Utf8Path> + Debug,
+    to: impl AsRef<Utf8Path> + Debug,
+) -> Result<(), Error> {
+    tracing::trace!(from=?path, to=?to, "copying_file");
+
+    // TODO: include the destination in the error message
+    std::fs::copy(path.as_ref(), to.as_ref())
+        .map_err(|err| Error::FileIo {
+            action: FileIoAction::Copy,
+            kind: FileKind::File,
+            path: Utf8PathBuf::from(path.as_ref()),
+            err: Some(err.to_string()),
+        })
+        .map(|_| ())
+}
+
+pub fn copy_dir(
+    path: impl AsRef<Utf8Path> + Debug,
+    to: impl AsRef<Utf8Path> + Debug,
+) -> Result<(), Error> {
+    tracing::trace!(from=?path, to=?to, "copying_directory");
+
+    // TODO: include the destination in the error message
+    fs_extra::dir::copy(
+        path.as_ref(),
+        to.as_ref(),
+        &fs_extra::dir::CopyOptions::new()
+            .copy_inside(false)
+            .content_only(true),
+    )
+    .map_err(|err| Error::FileIo {
+        action: FileIoAction::Copy,
+        kind: FileKind::Directory,
+        path: Utf8PathBuf::from(path.as_ref()),
+        err: Some(err.to_string()),
+    })
+    .map(|_| ())
+}
+
+pub fn symlink_dir(
+    src: impl AsRef<Utf8Path> + Debug,
+    dest: impl AsRef<Utf8Path> + Debug,
+) -> Result<(), Error> {
+    tracing::trace!(src=?src, dest=?dest, "symlinking");
+    let src = canonicalise(src.as_ref())?;
+
+    #[cfg(target_family = "windows")]
+    let result = std::os::windows::fs::symlink_dir(src, dest.as_ref());
+    #[cfg(not(target_family = "windows"))]
+    let result = std::os::unix::fs::symlink(src, dest.as_ref());
+
+    result.map_err(|err| Error::FileIo {
+        action: FileIoAction::Link,
+        kind: FileKind::File,
+        path: Utf8PathBuf::from(dest.as_ref()),
+        err: Some(err.to_string()),
+    })?;
+    Ok(())
+}
+
+pub fn hardlink(
+    from: impl AsRef<Utf8Path> + Debug,
+    to: impl AsRef<Utf8Path> + Debug,
+) -> Result<(), Error> {
+    tracing::trace!(from=?from, to=?to, "hardlinking");
+    std::fs::hard_link(from.as_ref(), to.as_ref())
+        .map_err(|err| Error::FileIo {
+            action: FileIoAction::Link,
+            kind: FileKind::File,
+            path: Utf8PathBuf::from(from.as_ref()),
+            err: Some(err.to_string()),
+        })
+        .map(|_| ())
+}
+
+pub fn canonicalise(path: &Utf8Path) -> Result<Utf8PathBuf, Error> {
+    std::fs::canonicalize(path)
+        .map_err(|err| Error::FileIo {
+            action: FileIoAction::Canonicalise,
+            kind: FileKind::File,
+            path: Utf8PathBuf::from(path),
+            err: Some(err.to_string()),
+        })
+        .map(|pb| Utf8PathBuf::from_path_buf(pb).expect("Non Utf8 Path"))
+}

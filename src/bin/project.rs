@@ -4,17 +4,10 @@ use clap::{
     builder::{styling, Styles},
     command, Parser,
 };
-use gleam_core::{
-    error::{FileIoAction, FileKind},
-    javascript::set_bigint_enabled,
-};
+use gleam_core::error::{FileIoAction, FileKind};
 use sgleam::{
-    error::{show_error, SgleamError},
-    format,
-    gleam::find_imports,
-    run::{run_check, run_interative, run_main, run_test},
+    error::{show_error, SgleamError}, fs::ProjectIO, gleam::Project, run::run_interative
 };
-use std::process::exit;
 
 /// The student version of gleam.
 #[derive(Parser)]
@@ -75,15 +68,17 @@ fn main() {
 }
 
 fn run() -> Result<(), SgleamError> {
+
     let cli = Cli::parse();
+    let project = Project::<ProjectIO>::default();
 
-    set_bigint_enabled(!cli.number);
+    // set_bigint_enabled(!cli.number);
 
-    // TODO: include quickjs version
-    if cli.version {
-        println!("{}", sgleam::version());
-        return Ok(());
-    }
+    // // TODO: include quickjs version
+    // if cli.version {
+    //     println!("{}", sgleam::version());
+    //     return Ok(());
+    // }
 
     let user_files = cli
         .paths
@@ -91,30 +86,32 @@ fn run() -> Result<(), SgleamError> {
         .map(|path| make_relative_to_current_dir(path.into()))
         .collect::<Result<Vec<_>, _>>()?;
 
-    if cli.format {
-        return Ok(format::run(false, user_files)?);
-    }
+    // if cli.format {
+    //     return Ok(format::run(false, user_files)?);
+    // }
 
     if user_files.is_empty() {
-        return run_interative(&user_files, cli.quiet);
+        return run_interative(project, &user_files, cli.quiet);
     }
 
-    if !cli.check && !cli.test && user_files.len() != 1 {
-        eprintln!("Specify at most one.");
-        exit(1);
-    }
+    Ok(())
 
-    let files = find_imports(user_files.clone())?;
+    // if !cli.check && !cli.test && user_files.len() != 1 {
+    //     eprintln!("Specify at most one.");
+    //     exit(1);
+    // }
 
-    if cli.check {
-        run_check(&files)
-    } else if cli.test {
-        run_test(&user_files, &files)
-    } else if cli.interative {
-        run_interative(&files, cli.quiet)
-    } else {
-        run_main(&files)
-    }
+    // let files = find_imports(user_files.clone())?;
+
+    // if cli.check {
+    //     run_check(&files)
+    // } else if cli.test {
+    //     run_test(&user_files, &files)
+    // } else if cli.interative {
+    //     run_interative(&files, cli.quiet)
+    // } else {
+    //     run_main(&files)
+    // }
 }
 
 fn make_relative_to_current_dir(path: Utf8PathBuf) -> Result<Utf8PathBuf, SgleamError> {

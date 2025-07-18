@@ -62,7 +62,7 @@ impl Default for Project<InMemoryFileSystem> {
 impl Default for Project<ProjectIO> {
     fn default() -> Project<ProjectIO> {
         let mut project = Project {
-            root: "/".into(),
+            root: "./".into(),
             fs: ProjectIO::new(),
         };
 
@@ -82,15 +82,15 @@ impl<I: IO> Project<I> {
     }
 
     pub fn source(&self) -> Utf8PathBuf {
-        self.root.join("/src")
+        self.root.join("src")
     }
 
     pub fn out(&self) -> Utf8PathBuf {
-        self.root.join("/build")
+        self.root.join("build")
     }
 
     pub fn prelude(&self) -> Utf8PathBuf {
-        self.root.join("/build/prelude.mjs")
+        self.root.join("build/prelude.mjs")
     }
 
     pub fn write_source(&mut self, name: &str, content: &str) {
@@ -251,13 +251,14 @@ fn extract_tar<I: IO>(
     mut arch: Archive<&[u8]>,
     to: &Utf8Path,
 ) -> Result<(), Error> {
-    let mut buf = vec![];
+    let mut buf: Vec<u8> = vec![];
     for entry in arch.entries().map_err(to_error_stdio)? {
         let mut entry = entry.map_err(to_error_stdio)?;
         let is_dir = entry.header().entry_type().is_dir();
         let entry_path = entry.path().map_err(to_error_stdio)?.into_owned();
         let entry_path = Utf8PathBuf::from_path_buf(entry_path).map_err(to_error_nonutf8_path)?;
         let path = to.join(entry_path);
+
         if is_dir {
             fs.mkdir(&path)?;
         } else {

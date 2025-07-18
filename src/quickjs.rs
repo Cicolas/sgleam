@@ -30,6 +30,8 @@ pub struct QuickJsEngine<I: IO + 'static> {
     // ! PhantomData is used here to avoid Rust check from complaining
     // ! the absence of I usage, tho it is used inside Context struct,
     // ! but rquickjs doesn't expose this type as a generic
+    // ! an possilbe outcome to this is implementing a wrapper of Context
+    // ! that possibly can have the PhantomData
     phantom_data: PhantomData<I>,
 }
 
@@ -216,13 +218,17 @@ struct FileResolver {
 
 impl Resolver for FileResolver {
     fn resolve(&mut self, _ctx: &Ctx, base: &str, name: &str) -> Result<String> {
+        println!("{}, {}", base, name);
         let result = if self.first {
+            println!("if");
             // FIXME: remove this first hack
             self.first = false;
             self.base.join(name)
         } else if base == "eval_script" {
+            println!("else if");
             self.base.join(name.strip_prefix("./").unwrap_or(name))
         } else {
+            println!("else");
             resolve_path(
                 &Path::new(base)
                     .parent()
@@ -232,6 +238,7 @@ impl Resolver for FileResolver {
                     .join(name),
             )
         };
+        println!("fim");
         Ok(result.to_string_lossy().into())
     }
 }

@@ -5,13 +5,12 @@ use clap::{
     command, Parser,
 };
 use gleam_core::{
-    error::{FileIoAction, FileKind},
-    javascript::set_bigint_enabled,
+    error::{FileIoAction, FileKind}, io::memory::InMemoryFileSystem, javascript::set_bigint_enabled
 };
 use sgleam::{
     error::{show_error, SgleamError},
     format,
-    gleam::find_imports,
+    gleam::{find_imports, Project},
     run::{run_check, run_interative, run_main, run_test},
 };
 use std::process::exit;
@@ -76,6 +75,7 @@ fn main() {
 
 fn run() -> Result<(), SgleamError> {
     let cli = Cli::parse();
+    let project = Project::<InMemoryFileSystem>::default();
 
     set_bigint_enabled(!cli.number);
 
@@ -96,7 +96,7 @@ fn run() -> Result<(), SgleamError> {
     }
 
     if user_files.is_empty() {
-        return run_interative(&user_files, cli.quiet);
+        return run_interative(project, &user_files, cli.quiet);
     }
 
     if !cli.check && !cli.test && user_files.len() != 1 {
@@ -111,7 +111,7 @@ fn run() -> Result<(), SgleamError> {
     } else if cli.test {
         run_test(&user_files, &files)
     } else if cli.interative {
-        run_interative(&files, cli.quiet)
+        run_interative(project, &files, cli.quiet)
     } else {
         run_main(&files)
     }

@@ -9,6 +9,7 @@ camino = "1.1.9"
 clap = { version = "4", features = ["derive"] }
 dirs = "5"
 ecow = "0.2.3"
+fs_extra = "1.3.0"
 gleam-core = { git = "https://github.com/malbarbo/gleam.git", branch = "sgleam" }
 im = "15.1.0"
 indoc = "2.0.5"

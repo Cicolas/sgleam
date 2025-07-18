@@ -19,12 +19,11 @@ use crate::quickjs::QuickJsEngine as JsEngine;
 
 const SGLEAM_SMAIN: &str = "smain";
 
-pub fn run_interative(paths: &[Utf8PathBuf], quiet: bool) -> Result<(), SgleamError> {
+pub fn run_interative<I: IO + 'static>(mut project: Project<I>, paths: &[Utf8PathBuf], quiet: bool) -> Result<(), SgleamError> {
     if !quiet {
         print!("{}", welcome_message());
     }
 
-    let mut project = Project::default();
     let modules = copy_files_and_build(&mut project, paths)?;
     let module = paths.first().and_then(|input| {
         let name = input.with_extension("");
@@ -32,7 +31,7 @@ pub fn run_interative(paths: &[Utf8PathBuf], quiet: bool) -> Result<(), SgleamEr
         get_module(&modules, &name)
     });
 
-    let mut repl = Repl::<JsEngine<InMemoryFileSystem>, InMemoryFileSystem>::new(project, module)?;
+    let mut repl = Repl::<JsEngine<I>, I>::new(project, module)?;
     for input in ReplReader::new()? {
         match repl.run(&input) {
             Err(err) => show_error(&err),
